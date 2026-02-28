@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+  EMPLOYEE
+}
+
+enum EmployeeType {
+  DESIGNER
+  QC
+  BOTH
+}
+
+enum CaseStatus {
+  PENDING_PAYMENT
+  OPENED
+  ASSIGNED
+  IN_DESIGN
+  PENDING_QC
+  QC_REJECTED
+  PENDING_CLIENT_REVIEW
+  CLIENT_REJECTED
+  APPROVED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         UserRole
+  employeeType EmployeeType?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  createdPatients      Patient[]
+  createdCases         Case[]              @relation("CaseCreator")
+  assignedAsDesigner   Case[]              @relation("CaseDesigner")
+  assignedAsQC         Case[]              @relation("CaseQC")
+  designerAssignments  CaseAssignment[]    @relation("DesignerAssignment")
+  qcAssignments        CaseAssignment[]    @relation("QCAssignment")
+  adminAssignments     CaseAssignment[]    @relation("AdminAssignment")
+  workflowLogs         CaseWorkflowLog[]
+
+  @@map("users")
+}
+
+model Patient {
+  id          String   @id @default(cuid())
+  name        String
+  dateOfBirth DateTime?
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  cases     Case[]
+
+  @@map("patients")
+}
+
+model Case {
+  id          String     @id @default(cuid())
+  patientId   String
+  createdById String
+  status      CaseStatus @default(PENDING_PAYMENT)
+  designerId  String?
+  qcId        String?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation("CaseCreator", fields: [createdById], references: [id])
+  designer    User?              @relation("CaseDesigner", fields: [designerId], references: [id])
+  qc          User?              @relation("CaseQC", fields: [qcId], references: [id])
+  assignments CaseAssignment[]
+  payments    Payment[]
+  workflowLogs CaseWorkflowLog[]
+
+  @@index([patientId])
+  @@index([createdById])
+  @@index([designerId])
+  @@index([qcId])
+  @@index([status])
+  @@map("cases")
+}
+
+model CaseAssignment {
+  id          String   @id @default(cuid())
+  caseId      String
+  designerId  String
+  qcId        String
+  assignedById String
+  assignedAt  DateTime @default(now())
+
+  case       Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  designer   User @relation("DesignerAssignment", fields: [designerId], references: [id])
+  qc         User @relation("QCAssignment", fields: [qcId], references: [id])
+  assignedBy User @relation("AdminAssignment", fields: [assignedById], references: [id])
+
+  @@index([caseId])
+  @@map("case_assignments")
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  caseId     String
+  amount     Float
+  status     PaymentStatus @default(PENDING)
+  externalId String?
+  paidAt     DateTime?
+  createdAt  DateTime      @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("payments")
+}
+
+model CaseWorkflowLog {
+  id           String      @id @default(cuid())
+  caseId       String
+  fromStatus   CaseStatus?
+  toStatus     CaseStatus
+  performedById String
+  note         String?
+  createdAt    DateTime    @default(now())
+
+  case        Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  performedBy User @relation(fields: [performedById], references: [id])
+
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("case_workflow_logs")
+}

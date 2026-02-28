@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+
+/src/generated/prisma
+
+# Documentation (except README.md)
+API.md
+QUICKSTART.md
+SWAGGER.md
+SWAGGER_IMPLEMENTATION.md
+PROJECT_SUMMARY.md
