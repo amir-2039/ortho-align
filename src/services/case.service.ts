@@ -151,6 +151,7 @@ export class CaseService {
           },
         },
         payments: true,
+        prescription: true,
         workflowLogs: {
           orderBy: {
             createdAt: 'desc',
@@ -215,6 +216,7 @@ export class CaseService {
           },
           take: 1,
         },
+        prescription: true,
       },
       orderBy: {
         createdAt: 'desc',

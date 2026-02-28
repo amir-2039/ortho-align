@@ -13,9 +13,11 @@ const router = Router();
  * /api/auth/register:
  *   post:
  *     tags: [Authentication]
- *     summary: Register a new user
+ *     summary: Register a new CLIENT user
  *     description: |
- *       Create a new user account with comprehensive validation.
+ *       Create a new CLIENT account with comprehensive validation.
+ *       
+ *       **Note:** Only CLIENT users can self-register. EMPLOYEE accounts must be created by ADMIN.
  *       
  *       **Password Requirements:**
  *       - Minimum 8 characters
@@ -24,7 +26,7 @@ const router = Router();
  *       - At least one special character (!@#$%^&*)
  *       
  *       **CLIENT Role Requirements:**
- *       In addition to basic fields (email, password, name, role), CLIENT users must provide:
+ *       In addition to basic fields (email, password, name), CLIENT users must provide:
  *       - gender
  *       - region
  *       - phone
@@ -60,14 +62,14 @@ const router = Router();
  *                 description: Full name of the user
  *               role:
  *                 type: string
- *                 enum: [CLIENT, ADMIN, EMPLOYEE]
+ *                 enum: [CLIENT]
  *                 example: CLIENT
- *                 description: User role
+ *                 description: Only CLIENT role can self-register
  *               employeeType:
  *                 type: string
  *                 enum: [DESIGNER, QC, BOTH]
- *                 description: Required only if role is EMPLOYEE
- *                 example: DESIGNER
+ *                 description: Not applicable for CLIENT registration (EMPLOYEE accounts created by ADMIN)
+ *                 example: null
  *               gender:
  *                 type: string
  *                 enum: [MALE, FEMALE, OTHER]
@@ -108,21 +110,6 @@ const router = Router();
  *                 website: https://dental-practice.com
  *                 businessAddress: 123 Dental Ave, Springfield, IL 62701
  *                 hearAboutUs: Google Search
- *             employeeRegistration:
- *               summary: Register an EMPLOYEE user
- *               value:
- *                 email: designer@example.com
- *                 password: SecurePass123!
- *                 name: Alex Designer
- *                 role: EMPLOYEE
- *                 employeeType: DESIGNER
- *             adminRegistration:
- *               summary: Register an ADMIN user
- *               value:
- *                 email: admin@example.com
- *                 password: SecurePass123!
- *                 name: Admin User
- *                 role: ADMIN
  *     responses:
  *       201:
  *         description: User registered successfully
@@ -301,7 +288,13 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
  *   post:
  *     tags: [Authentication]
  *     summary: Login and receive JWT token
- *     description: Authenticate with email and password to receive a JWT access token
+ *     description: |
+ *       Authenticate with email and password to receive a JWT access token.
+ *       
+ *       **Supported Roles:**
+ *       - CLIENT: Doctors who create cases
+ *       - EMPLOYEE: Designers and QC specialists
+ *       - ADMIN: System administrators
  *     security: []
  *     requestBody:
  *       required: true
@@ -321,6 +314,22 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
  *                 type: string
  *                 format: password
  *                 example: password123
+ *           examples:
+ *             clientLogin:
+ *               summary: CLIENT login
+ *               value:
+ *                 email: client@example.com
+ *                 password: SecurePass123!
+ *             employeeLogin:
+ *               summary: EMPLOYEE login
+ *               value:
+ *                 email: designer@orthoalign.com
+ *                 password: Designer123!
+ *             adminLogin:
+ *               summary: ADMIN login
+ *               value:
+ *                 email: admin@orthoalign.com
+ *                 password: Admin123!
  *     responses:
  *       200:
  *         description: Login successful

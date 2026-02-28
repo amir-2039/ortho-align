@@ -33,6 +33,7 @@ enum Gender {
 
 enum CaseStatus {
   PENDING_PAYMENT
+  PENDING_APPROVAL
   OPENED
   ASSIGNED
   IN_DESIGN
@@ -48,6 +49,32 @@ enum PaymentStatus {
   PENDING
   COMPLETED
   FAILED
+}
+
+enum FileCategory {
+  SCAN
+  PHOTO
+  XRAY
+  PRODUCTION
+  OTHER
+}
+
+enum AlignmentGoal {
+  MAINTAIN
+  IMPROVE
+  IDEALIZE
+}
+
+enum ProcedureOption {
+  YES
+  NO
+  ONLY_IF_NEEDED
+}
+
+enum MidlinePosition {
+  CENTERED
+  SHIFTED_RIGHT
+  SHIFTED_LEFT
 }
 
 model User {
@@ -77,6 +104,8 @@ model User {
   qcAssignments        CaseAssignment[]    @relation("QCAssignment")
   adminAssignments     CaseAssignment[]    @relation("AdminAssignment")
   workflowLogs         CaseWorkflowLog[]
+  comments             CaseComment[]
+  productionUrls       CaseProductionUrl[]
 
   @@map("users")
 }
@@ -98,24 +127,30 @@ model Patient {
 }
 
 model Case {
-  id             String     @id @default(cuid())
-  patientId      String
-  createdById    String
-  status         CaseStatus @default(PENDING_PAYMENT)
-  designerId     String?
-  qcId           String?
-  notes          String?
-  refinementCount Int       @default(0)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  patientId       String
+  createdById     String
+  status          CaseStatus @default(PENDING_PAYMENT)
+  designerId      String?
+  qcId            String?
+  notes           String?
+  refinementCount Int        @default(0)
+  paymentProofUrl String?
+  submittedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  createdBy   User               @relation("CaseCreator", fields: [createdById], references: [id])
-  designer    User?              @relation("CaseDesigner", fields: [designerId], references: [id])
-  qc          User?              @relation("CaseQC", fields: [qcId], references: [id])
-  assignments CaseAssignment[]
-  payments    Payment[]
-  workflowLogs CaseWorkflowLog[]
+  patient        Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy      User                 @relation("CaseCreator", fields: [createdById], references: [id])
+  designer       User?                @relation("CaseDesigner", fields: [designerId], references: [id])
+  qc             User?                @relation("CaseQC", fields: [qcId], references: [id])
+  assignments    CaseAssignment[]
+  payments       Payment[]
+  workflowLogs   CaseWorkflowLog[]
+  files          CaseFile[]
+  prescription   Prescription?
+  comments       CaseComment[]
+  productionUrls CaseProductionUrl[]
 
   @@index([patientId])
   @@index([createdById])
@@ -173,4 +208,135 @@ model CaseWorkflowLog {
   @@index([caseId])
   @@index([createdAt])
   @@map("case_workflow_logs")
+}
+
+model CaseFile {
+  id          String       @id @default(cuid())
+  caseId      String
+  category    FileCategory
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  uploadedAt  DateTime     @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([category])
+  @@map("case_files")
+}
+
+model Prescription {
+  id     String @id @default(cuid())
+  caseId String @unique
+  
+  // DURATION
+  durationRecommended Boolean @default(true)
+  durationLimitSteps  Int?
+  
+  // EXISTING CONDITION
+  chiefComplaint      String
+  
+  upperMidlinePosition MidlinePosition @default(CENTERED)
+  upperMidlineShiftMm  Float?
+  
+  lowerMidlinePosition MidlinePosition @default(CENTERED)
+  lowerMidlineShiftMm  Float?
+  
+  canineRelationshipRight String?
+  canineRelationshipLeft  String?
+  
+  molarRelationshipRight  String?
+  molarRelationshipLeft   String?
+  
+  // INSTRUCTION - Treat Arches
+  treatUpperArch Boolean @default(true)
+  treatLowerArch Boolean @default(true)
+  
+  // INSTRUCTION - Alignment Goals
+  upperMidlineGoal         AlignmentGoal @default(IMPROVE)
+  lowerMidlineGoal         AlignmentGoal @default(IMPROVE)
+  overjetGoal              AlignmentGoal @default(IMPROVE)
+  overbiteGoal             AlignmentGoal @default(IMPROVE)
+  archFormGoal             AlignmentGoal @default(IMPROVE)
+  canineRelationshipGoal   AlignmentGoal @default(IMPROVE)
+  molarRelationshipGoal    AlignmentGoal @default(MAINTAIN)
+  posteriorRelationshipGoal AlignmentGoal @default(MAINTAIN)
+  
+  // INSTRUCTION - Procedures
+  iprOption       ProcedureOption @default(ONLY_IF_NEEDED)
+  engagersOption  ProcedureOption @default(ONLY_IF_NEEDED)
+  proclineOption  ProcedureOption @default(ONLY_IF_NEEDED)
+  expandOption    ProcedureOption @default(ONLY_IF_NEEDED)
+  distalizeOption ProcedureOption @default(ONLY_IF_NEEDED)
+  
+  // INSTRUCTION - Tooth-Specific Selections (Universal Notation 1-32)
+  avoidEngagersTeeth Json @default("[]")
+  extractTeeth       Json @default("[]")
+  leaveSpacesTeeth   Json @default("[]")
+  doNotMoveTeeth     Json @default("[]")
+  
+  // RETAINER OPTION
+  includeRetainer Boolean @default(true)
+  
+  // ADDITIONAL INSTRUCTIONS
+  additionalInstructions String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  
+  @@map("prescriptions")
+}
+
+model CaseComment {
+  id        String   @id @default(cuid())
+  caseId    String
+  userId    String
+  comment   String
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case        Case                 @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id])
+  attachments CommentAttachment[]
+
+  @@index([caseId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([isInternal])
+  @@map("case_comments")
+}
+
+model CommentAttachment {
+  id        String   @id @default(cuid())
+  commentId String
+  fileName  String
+  fileUrl   String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  comment CaseComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@map("comment_attachments")
+}
+
+model CaseProductionUrl {
+  id          String   @id @default(cuid())
+  caseId      String
+  url         String
+  description String?
+  addedById   String
+  createdAt   DateTime @default(now())
+
+  case      Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  addedBy   User @relation(fields: [addedById], references: [id])
+
+  @@index([caseId])
+  @@map("case_production_urls")
 }
