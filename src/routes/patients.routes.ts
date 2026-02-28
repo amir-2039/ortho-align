@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import prisma from '../lib/prisma';
-import { UserRole } from '@prisma/client';
+import { UserRole, Gender } from '@prisma/client';
 
 const router = Router();
 
@@ -25,10 +25,17 @@ const router = Router();
  *               name:
  *                 type: string
  *                 example: Jane Smith
+ *               gender:
+ *                 type: string
+ *                 enum: [MALE, FEMALE, OTHER]
+ *                 example: FEMALE
  *               dateOfBirth:
  *                 type: string
  *                 format: date
  *                 example: "1990-01-15"
+ *               address:
+ *                 type: string
+ *                 example: "123 Main St, New York, NY 10001"
  *               notes:
  *                 type: string
  *                 example: Regular patient, upper arch needed
@@ -42,6 +49,20 @@ const router = Router();
  *               properties:
  *                 patient:
  *                   $ref: '#/components/schemas/Patient'
+ *             example:
+ *               patient:
+ *                 id: clx456def
+ *                 name: Jane Smith
+ *                 gender: FEMALE
+ *                 dateOfBirth: "1990-01-15"
+ *                 address: "123 Main St, New York, NY 10001"
+ *                 notes: Regular patient, upper arch needed
+ *                 createdById: clx123abc
+ *                 createdAt: "2024-01-15T10:30:00.000Z"
+ *                 createdBy:
+ *                   id: clx123abc
+ *                   name: Dr. John Doe
+ *                   email: john@example.com
  *       400:
  *         description: Missing required fields
  *       401:
@@ -51,7 +72,7 @@ const router = Router();
  */
 router.post('/', authenticate, authorize(UserRole.CLIENT, UserRole.ADMIN), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, dateOfBirth, notes } = req.body;
+    const { name, gender, dateOfBirth, address, notes } = req.body;
 
     if (!name) {
       res.status(400).json({ error: 'Patient name is required' });
@@ -61,7 +82,9 @@ router.post('/', authenticate, authorize(UserRole.CLIENT, UserRole.ADMIN), async
     const patient = await prisma.patient.create({
       data: {
         name,
+        gender: gender || null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        address: address || null,
         notes,
         createdById: req.user!.id,
       },
@@ -264,10 +287,17 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promis
  *               name:
  *                 type: string
  *                 example: Jane Smith Updated
+ *               gender:
+ *                 type: string
+ *                 enum: [MALE, FEMALE, OTHER]
+ *                 example: FEMALE
  *               dateOfBirth:
  *                 type: string
  *                 format: date
  *                 example: "1990-01-15"
+ *               address:
+ *                 type: string
+ *                 example: "456 Oak Ave, Brooklyn, NY 11201"
  *               notes:
  *                 type: string
  *                 example: Updated patient notes
@@ -281,6 +311,20 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promis
  *               properties:
  *                 patient:
  *                   $ref: '#/components/schemas/Patient'
+ *             example:
+ *               patient:
+ *                 id: clx456def
+ *                 name: Jane Smith Updated
+ *                 gender: FEMALE
+ *                 dateOfBirth: "1990-01-15"
+ *                 address: "456 Oak Ave, Brooklyn, NY 11201"
+ *                 notes: Updated patient notes
+ *                 createdById: clx123abc
+ *                 createdAt: "2024-01-15T10:30:00.000Z"
+ *                 createdBy:
+ *                   id: clx123abc
+ *                   name: Dr. John Doe
+ *                   email: john@example.com
  *       401:
  *         description: Unauthorized
  *       403:
@@ -291,7 +335,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promis
 router.patch('/:id', authenticate, authorize(UserRole.CLIENT, UserRole.ADMIN), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
-    const { name, dateOfBirth, notes } = req.body;
+    const { name, gender, dateOfBirth, address, notes } = req.body;
 
     const existingPatient = await prisma.patient.findUnique({
       where: { id },
@@ -309,9 +353,11 @@ router.patch('/:id', authenticate, authorize(UserRole.CLIENT, UserRole.ADMIN), a
 
     const updateData: any = {};
     if (name) updateData.name = name;
+    if (gender !== undefined) updateData.gender = gender || null;
     if (dateOfBirth !== undefined) {
       updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     }
+    if (address !== undefined) updateData.address = address || null;
     if (notes !== undefined) updateData.notes = notes;
 
     const patient = await prisma.patient.update({

@@ -3,7 +3,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import prisma from '../lib/prisma';
-import { UserRole, EmployeeType } from '@prisma/client';
+import { UserRole, EmployeeType, Gender } from '@prisma/client';
+import { validatePassword, validateEmail, validatePhone } from '../lib/validation';
 
 const router = Router();
 
@@ -13,7 +14,22 @@ const router = Router();
  *   post:
  *     tags: [Authentication]
  *     summary: Register a new user
- *     description: Create a new user account with email, password, name, and role
+ *     description: |
+ *       Create a new user account with comprehensive validation.
+ *       
+ *       **Password Requirements:**
+ *       - Minimum 8 characters
+ *       - At least one uppercase letter (A-Z)
+ *       - At least one number (0-9)
+ *       - At least one special character (!@#$%^&*)
+ *       
+ *       **CLIENT Role Requirements:**
+ *       In addition to basic fields (email, password, name, role), CLIENT users must provide:
+ *       - gender
+ *       - region
+ *       - phone
+ *       - businessAddress
+ *       - hearAboutUs
  *     security: []
  *     requestBody:
  *       required: true
@@ -31,23 +47,82 @@ const router = Router();
  *                 type: string
  *                 format: email
  *                 example: client@example.com
+ *                 description: Valid email address (unique)
  *               password:
  *                 type: string
  *                 format: password
- *                 minLength: 6
- *                 example: password123
+ *                 minLength: 8
+ *                 example: SecurePass123!
+ *                 description: Must contain 8+ chars, uppercase, number, and special char (!@#$%^&*)
  *               name:
  *                 type: string
- *                 example: Dr. John Doe
+ *                 example: Dr. John Smith
+ *                 description: Full name of the user
  *               role:
  *                 type: string
  *                 enum: [CLIENT, ADMIN, EMPLOYEE]
  *                 example: CLIENT
+ *                 description: User role
  *               employeeType:
  *                 type: string
  *                 enum: [DESIGNER, QC, BOTH]
  *                 description: Required only if role is EMPLOYEE
  *                 example: DESIGNER
+ *               gender:
+ *                 type: string
+ *                 enum: [MALE, FEMALE, OTHER]
+ *                 description: Required for CLIENT role
+ *                 example: MALE
+ *               region:
+ *                 type: string
+ *                 description: Required for CLIENT role
+ *                 example: North America
+ *               phone:
+ *                 type: string
+ *                 description: Required for CLIENT role (10+ characters)
+ *                 example: +1-555-123-4567
+ *               website:
+ *                 type: string
+ *                 format: uri
+ *                 description: Optional - Business website
+ *                 example: https://example-dental.com
+ *               businessAddress:
+ *                 type: string
+ *                 description: Required for CLIENT role
+ *                 example: 123 Dental Ave, City, ST 12345
+ *               hearAboutUs:
+ *                 type: string
+ *                 description: Required for CLIENT role - How did you hear about us?
+ *                 example: Google Search
+ *           examples:
+ *             clientRegistration:
+ *               summary: Register a CLIENT user
+ *               value:
+ *                 email: client@example.com
+ *                 password: SecurePass123!
+ *                 name: Dr. John Smith
+ *                 role: CLIENT
+ *                 gender: MALE
+ *                 region: North America
+ *                 phone: +1-555-123-4567
+ *                 website: https://dental-practice.com
+ *                 businessAddress: 123 Dental Ave, Springfield, IL 62701
+ *                 hearAboutUs: Google Search
+ *             employeeRegistration:
+ *               summary: Register an EMPLOYEE user
+ *               value:
+ *                 email: designer@example.com
+ *                 password: SecurePass123!
+ *                 name: Alex Designer
+ *                 role: EMPLOYEE
+ *                 employeeType: DESIGNER
+ *             adminRegistration:
+ *               summary: Register an ADMIN user
+ *               value:
+ *                 email: admin@example.com
+ *                 password: SecurePass123!
+ *                 name: Admin User
+ *                 role: ADMIN
  *     responses:
  *       201:
  *         description: User registered successfully
@@ -59,11 +134,31 @@ const router = Router();
  *                 user:
  *                   $ref: '#/components/schemas/User'
  *       400:
- *         description: Missing required fields or invalid role
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Error'
+ *               oneOf:
+ *                 - type: object
+ *                   properties:
+ *                     error:
+ *                       type: string
+ *                       example: Missing required fields for CLIENT registration
+ *                     required:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["gender", "region", "phone", "businessAddress", "hearAboutUs"]
+ *                 - type: object
+ *                   properties:
+ *                     error:
+ *                       type: string
+ *                       example: Password does not meet requirements
+ *                     details:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Password must be at least 8 characters long", "Password must contain at least one special character (!@#$%^&*)"]
  *       409:
  *         description: User with this email already exists
  *         content:
@@ -73,18 +168,49 @@ const router = Router();
  */
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, employeeType } = req.body;
+    const { 
+      email, 
+      password, 
+      name, 
+      role, 
+      employeeType,
+      gender,
+      region,
+      phone,
+      website,
+      businessAddress,
+      hearAboutUs
+    } = req.body;
 
+    // Basic required fields
     if (!email || !password || !name || !role) {
-      res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: 'Missing required fields: email, password, name, role' });
       return;
     }
 
+    // Email validation
+    if (!validateEmail(email)) {
+      res.status(400).json({ error: 'Invalid email format' });
+      return;
+    }
+
+    // Password validation
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      res.status(400).json({ 
+        error: 'Password does not meet requirements',
+        details: passwordValidation.errors
+      });
+      return;
+    }
+
+    // Role validation
     if (!Object.values(UserRole).includes(role)) {
       res.status(400).json({ error: 'Invalid role' });
       return;
     }
 
+    // Employee type validation
     if (role === UserRole.EMPLOYEE && !employeeType) {
       res.status(400).json({ error: 'Employee type is required for EMPLOYEE role' });
       return;
@@ -95,6 +221,30 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Client-specific required fields
+    if (role === UserRole.CLIENT) {
+      if (!gender || !region || !phone || !businessAddress || !hearAboutUs) {
+        res.status(400).json({ 
+          error: 'Missing required fields for CLIENT registration',
+          required: ['gender', 'region', 'phone', 'businessAddress', 'hearAboutUs']
+        });
+        return;
+      }
+
+      // Gender validation
+      if (!Object.values(Gender).includes(gender)) {
+        res.status(400).json({ error: 'Invalid gender. Must be MALE, FEMALE, or OTHER' });
+        return;
+      }
+
+      // Phone validation
+      if (!validatePhone(phone)) {
+        res.status(400).json({ error: 'Invalid phone number format' });
+        return;
+      }
+    }
+
+    // Check if user exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -104,8 +254,10 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Create user
     const user = await prisma.user.create({
       data: {
         email,
@@ -113,6 +265,12 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
         name,
         role,
         employeeType: role === UserRole.EMPLOYEE ? employeeType : null,
+        gender: role === UserRole.CLIENT ? gender : null,
+        region: role === UserRole.CLIENT ? region : null,
+        phone: role === UserRole.CLIENT ? phone : null,
+        website: role === UserRole.CLIENT ? website : null,
+        businessAddress: role === UserRole.CLIENT ? businessAddress : null,
+        hearAboutUs: role === UserRole.CLIENT ? hearAboutUs : null,
       },
       select: {
         id: true,
@@ -120,6 +278,12 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
         name: true,
         role: true,
         employeeType: true,
+        gender: true,
+        region: true,
+        phone: true,
+        website: true,
+        businessAddress: true,
+        hearAboutUs: true,
         createdAt: true,
       },
     });

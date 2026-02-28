@@ -25,6 +25,12 @@ enum EmployeeType {
   BOTH
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 enum CaseStatus {
   PENDING_PAYMENT
   OPENED
@@ -35,6 +41,7 @@ enum CaseStatus {
   PENDING_CLIENT_REVIEW
   CLIENT_REJECTED
   APPROVED
+  CANCELLED
 }
 
 enum PaymentStatus {
@@ -50,6 +57,15 @@ model User {
   name         String
   role         UserRole
   employeeType EmployeeType?
+  
+  // Client-specific fields
+  gender           Gender?
+  region           String?
+  phone            String?
+  website          String?
+  businessAddress  String?
+  hearAboutUs      String?
+  
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -68,7 +84,9 @@ model User {
 model Patient {
   id          String   @id @default(cuid())
   name        String
+  gender      Gender?
   dateOfBirth DateTime?
+  address     String?
   notes       String?
   createdById String
   createdAt   DateTime @default(now())
@@ -80,15 +98,16 @@ model Patient {
 }
 
 model Case {
-  id          String     @id @default(cuid())
-  patientId   String
-  createdById String
-  status      CaseStatus @default(PENDING_PAYMENT)
-  designerId  String?
-  qcId        String?
-  notes       String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  patientId      String
+  createdById    String
+  status         CaseStatus @default(PENDING_PAYMENT)
+  designerId     String?
+  qcId           String?
+  notes          String?
+  refinementCount Int       @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
   createdBy   User               @relation("CaseCreator", fields: [createdById], references: [id])
@@ -103,6 +122,7 @@ model Case {
   @@index([designerId])
   @@index([qcId])
   @@index([status])
+  @@index([createdAt])
   @@map("cases")
 }
 

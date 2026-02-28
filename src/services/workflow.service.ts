@@ -117,10 +117,18 @@ export class WorkflowService {
       );
     }
 
+    // Check if this is a refinement (rejection)
+    const isRefinement = newStatus === CaseStatus.QC_REJECTED || newStatus === CaseStatus.CLIENT_REJECTED;
+    
+    const updateData: any = { status: newStatus };
+    if (isRefinement) {
+      updateData.refinementCount = { increment: 1 };
+    }
+
     const updatedCase = await prisma.$transaction([
       prisma.case.update({
         where: { id: caseId },
-        data: { status: newStatus },
+        data: updateData,
       }),
       prisma.caseWorkflowLog.create({
         data: {

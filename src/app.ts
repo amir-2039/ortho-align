@@ -9,6 +9,7 @@ import patientsRoutes from './routes/patients.routes';
 import casesRoutes from './routes/cases.routes';
 import paymentsRoutes from './routes/payments.routes';
 import usersRoutes from './routes/users.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 
 const app: Application = express();
 
@@ -35,6 +36,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/patients', patientsRoutes);
 app.use('/api/cases', casesRoutes);
 app.use('/api/payments', paymentsRoutes);
