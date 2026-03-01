@@ -37,8 +37,7 @@ export class CaseSubmissionService {
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
       Key: key,
       Body: file.buffer,
-      ContentType: file.mimetype,
-      ACL: 'public-read',
+      ContentType: file.mimetype
     });
 
     await s3Client.send(command);
